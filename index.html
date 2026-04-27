@@ -169,8 +169,9 @@
     input[type="text"], select, input[type="file"] {
       width: 100%; padding: 14px 16px;
       background: #11161d; border: 1px solid #2a3644;
-      border-radius: 14px; color: var(--text); font-size: 1.05rem; outline: none;
+      border-radius: 14px; color: var(--text); font-size: 16px !important; outline: none;
       transition: border-color 0.2s;
+      -webkit-appearance: none;
     }
     input[type="text"]:focus, select:focus { border-color: var(--blue); }
     input[type="file"] { padding: 10px; font-size: 0.95rem; }
@@ -215,7 +216,7 @@
     }
     .todo-item:active { transform: scale(0.97); }
     
-    .todo-content { width: 100%; display: flex; align-items: center; justify-content: center; z-index: 1; }
+    .todo-content { width: 100%; display: flex; align-items: center; justify-content: center; z-index: 1; padding: 24px 12px; }
     .todo-title { margin: 0; font-size: 1.85rem; font-weight: 800; color: var(--text); transition: all 0.2s; line-height: 1.3; text-align: center; word-break: break-word; }
     
     .todo-item[class*="theme-"] .todo-title { color: #1c1c1e; }
@@ -246,6 +247,19 @@
     .todo-foot {
       position: absolute; bottom: 12px; right: 12px; z-index: 3;
     }
+    
+    .todo-star-btn {
+      position: absolute; top: 12px; left: 12px; z-index: 10;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: transparent; border: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: transform 0.2s;
+    }
+    .todo-star-btn svg { width: 24px; height: 24px; fill: transparent; stroke: rgba(28,28,30,0.4); stroke-width: 2; transition: all 0.2s; }
+    .todo-star-btn:active { transform: scale(0.85); }
+    .todo-item[class*="theme-"] .todo-star-btn.starred svg { fill: #f5a623; stroke: #f5a623; }
+    .todo-star-btn.starred svg { fill: #f5a623; stroke: #f5a623; }
+    .todo-item.completed .todo-star-btn { opacity: 0.3; pointer-events: none; }
     
     .todo-del-btn {
       width: 36px; height: 36px; border-radius: 50%;
@@ -391,7 +405,7 @@
 
   <script>
     (function () {
-      var FIXED_API_KEY = "AIzaSyDxk6N1WwypkdGw2DmCFuDsCi9SL1uQATg";
+      var FIXED_API_KEY = "AIzaSyDaa0wqO-BFEIWE12A4LwUkGS657uosRrM";
       var MODEL_ID = "gemini-2.5-flash";
       var STORAGE_KEY = "gemini_todo_data_v2";
 
@@ -581,11 +595,13 @@
           catField.style.display = defaultCat ? "none" : "block";
         }
 
+        document.body.style.overflow = "hidden"; // Prevent iOS body scroll jitter
         addModal.classList.add("open");
         setTimeout(function() { todoText.focus(); }, 100);
       }
 
       function closeModal() {
+        document.body.style.overflow = "";
         addModal.classList.remove("open");
       }
 
@@ -714,6 +730,12 @@
         
         var items = state.todos.filter(function(t) { return t.category === currentViewCategory; });
         
+        items.sort(function(a, b) {
+          if (a.starred && !b.starred) return -1;
+          if (!a.starred && b.starred) return 1;
+          return 0;
+        });
+        
         if (items.length === 0) {
           todoListEl.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg><p>這裡空空如也，點擊右上角新增吧！</p></div>';
           return;
@@ -725,6 +747,17 @@
           
           var el = document.createElement("div");
           el.className = "todo-item " + themeClass + (todo.completed ? " completed" : "");
+          
+          var starBtn = document.createElement("button");
+          starBtn.className = "todo-star-btn" + (todo.starred ? " starred" : "");
+          starBtn.innerHTML = '<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>';
+          starBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
+            todo.starred = !todo.starred;
+            saveState();
+            renderTodoList();
+          });
+          el.appendChild(starBtn);
           
           el.addEventListener("click", function() {
             todo.completed = !todo.completed;
@@ -741,6 +774,28 @@
             delBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
             // Also update dashboard count silently if we return
           });
+
+          // Long press to edit
+          var pressTimer;
+          function startPress(e) {
+            if (e.target.closest('button')) return; // ignore buttons
+            pressTimer = setTimeout(function() {
+              pressTimer = null;
+              var newText = prompt("編輯待辦事項：", todo.text);
+              if (newText !== null && newText.trim() !== "") {
+                todo.text = newText.trim();
+                saveState();
+                renderTodoList();
+              }
+            }, 600);
+          }
+          function cancelPress() { if(pressTimer) clearTimeout(pressTimer); }
+          el.addEventListener("mousedown", startPress);
+          el.addEventListener("touchstart", startPress);
+          el.addEventListener("mouseup", cancelPress);
+          el.addEventListener("mouseleave", cancelPress);
+          el.addEventListener("touchend", cancelPress);
+          el.addEventListener("touchcancel", cancelPress);
 
           var content = document.createElement("div");
           content.className = "todo-content";
@@ -789,7 +844,8 @@
           text: text,
           category: cat,
           completed: false,
-          confirmDelete: false
+          confirmDelete: false,
+          starred: false
         });
         saveState();
         closeModal();
@@ -839,14 +895,23 @@
           var url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(MODEL_ID) + ":generateContent?key=" + encodeURIComponent(FIXED_API_KEY);
           var res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
           var raw = await res.text();
-          if (!res.ok) throw new Error("API 錯誤");
+          if (!res.ok) {
+            var errMsg = "API 錯誤 (" + res.status + ")";
+            try { var errObj = JSON.parse(raw); if (errObj.error && errObj.error.message) errMsg = errObj.error.message; } catch(e){}
+            throw new Error(errMsg);
+          }
           
           var outer = JSON.parse(raw);
           var text = (((outer || {}).candidates || [])[0] || {}).content;
           var firstPart = ((text || {}).parts || [])[0] || {};
           var parsedStr = String(firstPart.text || "").trim();
-          var m = parsedStr.match(/```(?:json)?\s*([\s\S]*?)```/i);
-          var parsed = JSON.parse(m ? m[1] : parsedStr);
+          var parsed;
+          try {
+            var m = parsedStr.match(/```(?:json)?\s*([\s\S]*?)```/i);
+            parsed = JSON.parse(m ? m[1] : parsedStr);
+          } catch(e) {
+            throw new Error("解析 AI 回應失敗，請再試一次。");
+          }
           
           var todos = Array.isArray(parsed.todos) ? parsed.todos : [];
           if (!todos.length) throw new Error("未發現待辦事項");
@@ -860,7 +925,7 @@
               ensureCategory(cat);
               state.todos.unshift({
                 id: Date.now().toString(36) + Math.random().toString(36).slice(2),
-                text: txt, category: cat, completed: false, confirmDelete: false
+                text: txt, category: cat, completed: false, confirmDelete: false, starred: false
               });
             }
           });
