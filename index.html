@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>待辦事項 Dashboard</title>
+  <style>
+    /* Reset & Base */
+    :root {
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif;
+      color-scheme: dark;
+      --bg: #11161d;
+      --panel: #1e252e;
+      --text: #e5ecf3;
+      --text-muted: #8b9fb1;
+      --blue: #3478f6;
+    }
+    html.light {
+      color-scheme: light;
+      --bg: #f2f2f7;
+      --panel: #ffffff;
+      --text: #1c1c1e;
+      --text-muted: #8e8e93;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; background: var(--bg); color: var(--text); overflow-x: hidden; }
+
+    /* Layouts */
+    .view {
+      display: none;
+      animation: fadeIn 0.2s ease;
+      padding-bottom: 40px;
+    }
+    .view.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+
+    .container { max-width: 820px; margin: 0 auto; padding: 0 16px; }
+
+    /* Topbar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+      max-width: 820px;
+      margin: 0 auto;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 10;
+    }
+    .icon-btn {
+      width: 44px; height: 44px;
+      border-radius: 14px;
+      background: var(--panel);
+      border: none;
+      color: var(--text);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .icon-btn:active { transform: scale(0.95); }
+    .icon-btn svg { width: 22px; height: 22px; stroke-width: 2; }
+    .topbar-title { font-size: 1.35rem; font-weight: 700; margin: 0; flex: 1; text-align: center; }
+
+    /* Header Area (分類 + 號) */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 12px 0 20px;
+    }
+    .section-header h2 { margin: 0; font-size: 1.35rem; font-weight: 700; }
+    .btn-primary {
+      width: 44px; height: 44px;
+      border-radius: 14px;
+      background: var(--blue);
+      border: none;
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(52, 120, 246, 0.4);
+      transition: transform 0.15s;
+    }
+    .btn-primary:active { transform: scale(0.92); }
+    .btn-primary svg { width: 24px; height: 24px; stroke-width: 2.5; }
+
+    /* Category Grid */
+    .cat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 16px;
+    }
+    @media (min-width: 400px) { .cat-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .cat-card {
+      border-radius: 22px;
+      padding: 20px;
+      height: 160px;
+      display: flex; flex-direction: column; justify-content: space-between;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.15s, filter 0.15s;
+    }
+    .cat-card:active { transform: scale(0.96); filter: brightness(0.9); }
+    
+    .cat-icon-wrap {
+      width: 48px; height: 48px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.55);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cat-icon-wrap svg { width: 24px; height: 24px; stroke-width: 2.2; }
+    
+    .cat-info { margin-top: auto; }
+    .cat-title { margin: 0; font-size: 1.45rem; font-weight: 800; color: #1c1c1e; }
+    .cat-count { margin: 4px 0 0; font-size: 0.85rem; font-weight: 600; color: rgba(28, 28, 30, 0.65); }
+    
+    .cat-arrow {
+      position: absolute;
+      bottom: 20px; right: 20px;
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.65);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cat-arrow svg { width: 18px; height: 18px; stroke: #1c1c1e; stroke-width: 2.5; }
+
+    /* Themes for categories */
+    .theme-0 { background: #ffe4aa !important; } .theme-0 .cat-icon-wrap svg { stroke: #d39316; }
+    .theme-1 { background: #d2f0ee !important; } .theme-1 .cat-icon-wrap svg { stroke: #3ea09b; }
+    .theme-2 { background: #e8e3fc !important; } .theme-2 .cat-icon-wrap svg { stroke: #7b56ed; }
+    .theme-3 { background: #ffe2d9 !important; } .theme-3 .cat-icon-wrap svg { stroke: #e07462; }
+    .theme-4 { background: #d9f3d6 !important; } .theme-4 .cat-icon-wrap svg { stroke: #4ca944; }
+    .theme-5 { background: #fce3ec !important; } .theme-5 .cat-icon-wrap svg { stroke: #d85799; }
+    
+    /* Modals / Bottom Sheet */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(6px);
+      opacity: 0; pointer-events: none; transition: opacity 0.25s;
+      z-index: 100;
+      display: flex; align-items: flex-end; justify-content: center;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: auto; }
+    
+    .bottom-sheet {
+      width: 100%; max-width: 640px;
+      background: #1a222a;
+      border-radius: 28px 28px 0 0;
+      padding: 24px;
+      transform: translateY(100%);
+      transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+      box-shadow: 0 -10px 40px rgba(0,0,0,0.3);
+    }
+    .modal-overlay.open .bottom-sheet { transform: translateY(0); }
+    
+    .sheet-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .sheet-header h3 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+    .close-btn { background: var(--panel); border: none; color: var(--text); width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;}
+    .close-btn:active { transform: scale(0.9); }
+
+    /* Form Fields */
+    .field { margin-bottom: 18px; }
+    .field label { display: block; font-size: 0.9rem; color: var(--text-muted); margin-bottom: 8px; font-weight: 600; }
+    input[type="text"], select, input[type="file"] {
+      width: 100%; padding: 14px 16px;
+      background: #11161d; border: 1px solid #2a3644;
+      border-radius: 14px; color: var(--text); font-size: 1.05rem; outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus, select:focus { border-color: var(--blue); }
+    input[type="file"] { padding: 10px; font-size: 0.95rem; }
+    
+    .btn-full {
+      width: 100%; padding: 16px;
+      background: var(--blue); border: none; border-radius: 14px;
+      color: #fff; font-size: 1.1rem; font-weight: 700; cursor: pointer;
+      margin-bottom: 12px; transition: filter 0.15s, transform 0.1s;
+    }
+    .btn-full:active { filter: brightness(1.1); transform: scale(0.98); }
+    .btn-full.secondary { background: #2a3644; color: var(--text); }
+    .btn-full:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    
+    .preview-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+    .preview-grid img { width: 100%; height: 64px; object-fit: cover; border-radius: 10px; }
+    
+    .status-msg { color: #5eb0ff; font-size: 0.95rem; text-align: center; margin: 12px 0; min-height: 1.4em; }
+    .status-msg.error { color: #ff6b6b; }
+
+    /* Cat Pill Selector */
+    .cat-selector { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .cat-pill {
+      padding: 10px 16px; border-radius: 999px;
+      background: var(--bg); border: 2px solid transparent;
+      color: var(--text-muted); font-size: 0.95rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .cat-pill.active {
+      background: rgba(52, 120, 246, 0.15); border-color: var(--blue); color: var(--blue);
+    }
+
+    /* Todo List in Category View */
+    .todo-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; margin-top: 10px; }
+    @media (min-width: 400px) { .todo-list { grid-template-columns: repeat(2, 1fr); } }
+    .todo-item {
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      min-height: 150px; padding: 16px;
+      background: var(--panel); border-radius: 20px;
+      transition: transform 0.15s ease, opacity 0.2s; 
+      cursor: pointer; position: relative;
+    }
+    .todo-item:active { transform: scale(0.97); }
+    
+    .todo-content { width: 100%; display: flex; align-items: center; justify-content: center; z-index: 1; }
+    .todo-title { margin: 0; font-size: 1.85rem; font-weight: 800; color: var(--text); transition: all 0.2s; line-height: 1.3; text-align: center; word-break: break-word; }
+    
+    .todo-item[class*="theme-"] .todo-title { color: #1c1c1e; }
+    .todo-item.completed[class*="theme-"] .todo-title { color: #1c1c1e; opacity: 0.4; }
+    .todo-item.completed .todo-title { color: var(--text-muted); text-decoration: none; opacity: 0.4; }
+    
+    .todo-item::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.5);
+      width: 72px;
+      height: 72px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233478f6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+      background-size: contain;
+      background-repeat: no-repeat;
+      pointer-events: none;
+      opacity: 0;
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease;
+      z-index: 2;
+    }
+    .todo-item.completed::after {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+    }
+    
+    .todo-foot {
+      position: absolute; bottom: 12px; right: 12px; z-index: 3;
+    }
+    
+    .todo-del-btn {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: transparent; border: none;
+      color: var(--text-muted); display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.2s; position: relative; z-index: 10;
+    }
+    .todo-item[class*="theme-"] .todo-del-btn { color: rgba(28, 28, 30, 0.4); }
+    .todo-item[class*="theme-"] .todo-del-btn:hover { background: rgba(255, 255, 255, 0.5); color: #ff5b5b; }
+    .todo-del-btn:hover { background: #3a2228; color: #ff5b5b; }
+    .todo-del-btn.confirming { background: #ff5b5b; color: #fff; width: auto; padding: 0 12px; border-radius: 18px; font-weight: 700; font-size: 0.85rem; }
+    
+    /* Empty State */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state svg { width: 56px; height: 56px; opacity: 0.3; margin-bottom: 16px; }
+    .empty-state p { font-size: 1.1rem; margin: 0; }
+    .drawer-mask {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.42);
+      opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 100;
+    }
+    .drawer-mask.open { opacity: 1; pointer-events: auto; }
+    .drawer {
+      position: fixed; top: 0; left: 0; height: 100%; width: min(300px, 85vw);
+      background: var(--panel); border-right: 1px solid rgba(128,128,128,0.1);
+      transform: translateX(-100%); transition: transform .25s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+      z-index: 101; padding: 24px;
+      overflow-y: auto;
+    }
+    .drawer.open { transform: translateX(0); }
+    .drawer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .drawer h2 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+    .drawer-cats { display: flex; flex-direction: column; }
+    .drawer-cat-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(128,128,128,0.1); }
+    .drawer-cat-name { font-size: 1.1rem; font-weight: 600; color: var(--text); }
+    .drawer-cat-del { background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; padding: 4px; border-radius: 6px; transition: all 0.2s; }
+    .drawer-cat-del:hover { color: #ff5b5b; background: rgba(255,91,91,0.15); }
+  </style>
+</head>
+<body>
+
+  <!-- Drawer (Left Slide Menu) -->
+  <div id="drawerMask" class="drawer-mask"></div>
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div class="drawer-header">
+      <h2>功能表</h2>
+      <button id="closeDrawerBtn" class="close-btn" type="button" aria-label="關閉選單">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    
+    <div class="field">
+      <label for="newCategory">新增分類</label>
+      <input id="newCategory" type="text" placeholder="例如：雜事、工作、採買" />
+    </div>
+    <button id="addCategoryBtn" class="btn-full" type="button">新增分類</button>
+
+    <div style="height: 1px; background: rgba(128,128,128,0.2); margin: 24px 0 12px;"></div>
+
+    <div id="drawerCatList" class="drawer-cats"></div>
+  </aside>
+
+  <!-- Dashboard View -->
+  <div id="viewDashboard" class="view active">
+    <header class="topbar">
+      <button id="menuBtn" class="icon-btn" aria-label="選單">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+      <h1 class="topbar-title">待辦事項</h1>
+      <button id="themeToggleBtn" class="icon-btn" aria-label="切換主題">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </button>
+    </header>
+
+    <div class="container">
+      <div class="section-header">
+        <h2>分類</h2>
+        <button id="openAddModalBtn" class="btn-primary" aria-label="新增">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+      </div>
+      <div id="categoryGrid" class="cat-grid"></div>
+    </div>
+  </div>
+
+  <!-- Category List View -->
+  <div id="viewCategory" class="view">
+    <header class="topbar">
+      <button id="backBtn" class="icon-btn" aria-label="返回">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+      </button>
+      <h1 id="catViewTitle" class="topbar-title">工作</h1>
+      <button id="openAddModalCatBtn" class="icon-btn" aria-label="新增">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      </button>
+    </header>
+
+    <div class="container">
+      <div id="todoList" class="todo-list"></div>
+    </div>
+  </div>
+
+  <!-- Add Bottom Sheet Modal -->
+  <div id="addModal" class="modal-overlay">
+    <div class="bottom-sheet">
+      <div class="sheet-header">
+        <h3 id="modalTitle">新增待辦事項</h3>
+        <button id="closeModalBtn" class="close-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <!-- Tab Switcher (Optional, here we just show all or toggle) -->
+      <div id="manualAddSection">
+        <div class="field">
+          <label>待辦內容</label>
+          <input id="todoText" type="text" placeholder="輸入待辦，例如：買牛奶" />
+        </div>
+        <div class="field" id="todoCategoryField">
+          <label>選擇分類</label>
+          <div id="catSelector" class="cat-selector"></div>
+          <input type="hidden" id="todoCategory" />
+        </div>
+        <button id="submitAddBtn" class="btn-full">加入待辦</button>
+        <button id="switchToAiBtn" class="btn-full secondary">切換到 AI 圖片辨識</button>
+      </div>
+
+      <div id="aiAddSection" style="display:none;">
+        <div class="field">
+          <label>上傳圖片（支援多選）</label>
+          <input id="imageInput" type="file" accept="image/*" multiple />
+          <div id="previewGrid" class="preview-grid"></div>
+        </div>
+        <button id="submitAiBtn" class="btn-full">Gemini 2.5 辨識並自動加入</button>
+        <button id="switchToManualBtn" class="btn-full secondary">返回手動輸入</button>
+      </div>
+      <div id="statusMsg" class="status-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var FIXED_API_KEY = "AIzaSyDxk6N1WwypkdGw2DmCFuDsCi9SL1uQATg";
+      var MODEL_ID = "gemini-2.5-flash";
+      var STORAGE_KEY = "gemini_todo_data_v2";
+
+      var defaultCategories = ["工作", "雜事", "個人", "購物"];
+      var state = loadState();
+
+      // View Elements
+      var viewDashboard = document.getElementById("viewDashboard");
+      var viewCategory = document.getElementById("viewCategory");
+      var categoryGrid = document.getElementById("categoryGrid");
+      var todoListEl = document.getElementById("todoList");
+      var catViewTitle = document.getElementById("catViewTitle");
+      var backBtn = document.getElementById("backBtn");
+      
+      // Topbar & Drawer Elements
+      var menuBtn = document.getElementById("menuBtn");
+      var themeToggleBtn = document.getElementById("themeToggleBtn");
+      var drawerMask = document.getElementById("drawerMask");
+      var drawer = document.getElementById("drawer");
+      var closeDrawerBtn = document.getElementById("closeDrawerBtn");
+      var newCategoryEl = document.getElementById("newCategory");
+      var addCategoryBtn = document.getElementById("addCategoryBtn");
+
+      // Modal Elements
+      var addModal = document.getElementById("addModal");
+      var openAddModalBtn = document.getElementById("openAddModalBtn");
+      var openAddModalCatBtn = document.getElementById("openAddModalCatBtn");
+      var closeModalBtn = document.getElementById("closeModalBtn");
+      
+      var manualAddSection = document.getElementById("manualAddSection");
+      var aiAddSection = document.getElementById("aiAddSection");
+      var switchToAiBtn = document.getElementById("switchToAiBtn");
+      var switchToManualBtn = document.getElementById("switchToManualBtn");
+      
+      var todoText = document.getElementById("todoText");
+      var todoCategory = document.getElementById("todoCategory");
+      var catDatalist = document.getElementById("catDatalist");
+      var submitAddBtn = document.getElementById("submitAddBtn");
+      
+      var imageInput = document.getElementById("imageInput");
+      var previewGrid = document.getElementById("previewGrid");
+      var submitAiBtn = document.getElementById("submitAiBtn");
+      var statusMsg = document.getElementById("statusMsg");
+
+      var currentViewCategory = null;
+
+      // Theme toggle
+      if (localStorage.getItem("gemini_todo_theme") === "light") {
+        document.documentElement.classList.add("light");
+      }
+      themeToggleBtn.addEventListener("click", function() {
+        document.documentElement.classList.toggle("light");
+        localStorage.setItem("gemini_todo_theme", document.documentElement.classList.contains("light") ? "light" : "dark");
+      });
+
+      // Drawer handlers
+      function closeDrawer() {
+        drawer.classList.remove("open");
+        drawerMask.classList.remove("open");
+        drawer.setAttribute("aria-hidden", "true");
+      }
+      menuBtn.addEventListener("click", function() {
+        drawer.classList.add("open");
+        drawerMask.classList.add("open");
+        drawer.setAttribute("aria-hidden", "false");
+      });
+      closeDrawerBtn.addEventListener("click", closeDrawer);
+      drawerMask.addEventListener("click", closeDrawer);
+
+      addCategoryBtn.addEventListener("click", function() {
+        var cat = String(newCategoryEl.value || "").trim();
+        if (!cat) { setStatus("請輸入分類名稱", true); return; }
+        ensureCategory(cat);
+        saveState();
+        renderDashboard();
+        renderDrawerCats();
+        newCategoryEl.value = "";
+        closeDrawer();
+      });
+
+      // Event Listeners
+      openAddModalBtn.addEventListener("click", function() { openModal(null); });
+      openAddModalCatBtn.addEventListener("click", function() { openModal(currentViewCategory); });
+      closeModalBtn.addEventListener("click", closeModal);
+      addModal.addEventListener("click", function(e) { if(e.target === addModal) closeModal(); });
+
+      switchToAiBtn.addEventListener("click", function() { manualAddSection.style.display="none"; aiAddSection.style.display="block"; });
+      switchToManualBtn.addEventListener("click", function() { aiAddSection.style.display="none"; manualAddSection.style.display="block"; });
+
+      backBtn.addEventListener("click", function() {
+        viewCategory.classList.remove("active");
+        viewDashboard.classList.add("active");
+        currentViewCategory = null;
+        renderDashboard();
+      });
+
+      submitAddBtn.addEventListener("click", handleManualAdd);
+      submitAiBtn.addEventListener("click", handleAiAdd);
+      imageInput.addEventListener("change", renderPreviews);
+
+      // Initialization
+      renderDashboard();
+      renderDrawerCats();
+
+      // Data Functions
+      function loadState() {
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) return JSON.parse(raw);
+        } catch (_) {}
+        // Fallback or Migrate from v1
+        try {
+          var oldRaw = localStorage.getItem("gemini_todo_data_v1");
+          if(oldRaw) {
+             var old = JSON.parse(oldRaw);
+             return { categories: old.categories || defaultCategories, todos: old.todos || [] };
+          }
+        } catch(_) {}
+        return { categories: defaultCategories.slice(), todos: [] };
+      }
+
+      function saveState() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+
+      function ensureCategory(cat) {
+        if (!cat) return;
+        if (state.categories.indexOf(cat) === -1) {
+          state.categories.push(cat);
+        }
+      }
+
+      function renderDrawerCats() {
+        var list = document.getElementById("drawerCatList");
+        if (!list) return;
+        list.innerHTML = "";
+        state.categories.forEach(function(cat) {
+          var item = document.createElement("div");
+          item.className = "drawer-cat-item";
+          
+          var name = document.createElement("div");
+          name.className = "drawer-cat-name";
+          name.textContent = cat;
+          item.appendChild(name);
+
+          var delBtn = document.createElement("button");
+          delBtn.className = "drawer-cat-del";
+          delBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
+          delBtn.addEventListener("click", function() {
+            var count = state.todos.filter(function(t) { return t.category === cat; }).length;
+            var msg = count > 0 ? '「' + cat + '」分類內還有 ' + count + ' 件待辦事項，確定要連同待辦事項一起刪除嗎？' : '確定要刪除分類「' + cat + '」嗎？';
+            if (confirm(msg)) {
+              state.categories = state.categories.filter(function(c) { return c !== cat; });
+              state.todos = state.todos.filter(function(t) { return t.category !== cat; });
+              saveState();
+              renderDashboard();
+              renderDrawerCats();
+              updateDatalist();
+              if (currentViewCategory === cat) {
+                viewCategory.classList.remove("active");
+                viewDashboard.classList.add("active");
+                currentViewCategory = null;
+              }
+            }
+          });
+          item.appendChild(delBtn);
+          list.appendChild(item);
+        });
+      }
+
+      // UI Functions
+      function setStatus(msg, isError) {
+        statusMsg.textContent = msg || "";
+        statusMsg.classList.toggle("error", !!isError);
+      }
+
+      function openModal(defaultCat) {
+        todoText.value = "";
+        todoCategory.value = defaultCat || "";
+        renderCatSelector();
+        setStatus("", false);
+        manualAddSection.style.display = "block";
+        aiAddSection.style.display = "none";
+        
+        var catField = document.getElementById("todoCategoryField");
+        if (catField) {
+          catField.style.display = defaultCat ? "none" : "block";
+        }
+
+        addModal.classList.add("open");
+        setTimeout(function() { todoText.focus(); }, 100);
+      }
+
+      function closeModal() {
+        addModal.classList.remove("open");
+      }
+
+      function renderCatSelector() {
+        var sel = document.getElementById("catSelector");
+        if (!sel) return;
+        sel.innerHTML = "";
+        var currentVal = todoCategory.value;
+        if (!currentVal && state.categories.length) {
+           currentVal = state.categories[0];
+           todoCategory.value = currentVal;
+        }
+        state.categories.forEach(function(cat) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "cat-pill" + (cat === currentVal ? " active" : "");
+          btn.textContent = cat;
+          btn.addEventListener("click", function() {
+            todoCategory.value = cat;
+            renderCatSelector();
+          });
+          sel.appendChild(btn);
+        });
+      }
+
+      function getIconForCategory(cat) {
+        var str = String(cat).toLowerCase();
+        if (str.indexOf("工作") > -1 || str.indexOf("work") > -1 || str.indexOf("公事") > -1 || str.indexOf("專案") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>'; // Briefcase
+        } else if (str.indexOf("購") > -1 || str.indexOf("買") > -1 || str.indexOf("shop") > -1 || str.indexOf("buy") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>'; // Shopping Cart
+        } else if (str.indexOf("人") > -1 || str.indexOf("私") > -1 || str.indexOf("personal") > -1 || str.indexOf("自己") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>'; // Heart
+        } else if (str.indexOf("遊") > -1 || str.indexOf("旅") > -1 || str.indexOf("玩") > -1 || str.indexOf("travel") > -1 || str.indexOf("出國") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-.5-.5-2.5 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.2-1.1.7l-1.3 2.6c-.2.4-.1 1 .4 1.3L9 14l-3 3-3-1-2 2 5 5 2-2-1-3 3-3 3.2 6.2c.3.5.9.6 1.3.4l2.6-1.3c.5-.2.8-.6.7-1.1z"></path></svg>'; // Airplane
+        } else if (str.indexOf("食") > -1 || str.indexOf("吃") > -1 || str.indexOf("餐") > -1 || str.indexOf("food") > -1 || str.indexOf("喝") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>'; // Coffee
+        } else if (str.indexOf("家") > -1 || str.indexOf("房") > -1 || str.indexOf("home") > -1 || str.indexOf("庭") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>'; // Home
+        } else if (str.indexOf("學") > -1 || str.indexOf("讀") > -1 || str.indexOf("課") > -1 || str.indexOf("study") > -1 || str.indexOf("書") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>'; // Book
+        } else if (str.indexOf("健") > -1 || str.indexOf("身") > -1 || str.indexOf("運") > -1 || str.indexOf("sport") > -1 || str.indexOf("gym") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>'; // Cloud (representing outdoors/breath)
+        } else if (str.indexOf("醫") > -1 || str.indexOf("病") > -1 || str.indexOf("藥") > -1 || str.indexOf("health") > -1 || str.indexOf("clinic") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>'; // Activity/Pulse
+        } else if (str.indexOf("錢") > -1 || str.indexOf("帳") > -1 || str.indexOf("費") > -1 || str.indexOf("money") > -1 || str.indexOf("bank") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>'; // Dollar Sign
+        } else if (str.indexOf("樂") > -1 || str.indexOf("音") > -1 || str.indexOf("music") > -1 || str.indexOf("歌") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>'; // Music Note
+        } else if (str.indexOf("車") > -1 || str.indexOf("駕") > -1 || str.indexOf("car") > -1 || str.indexOf("drive") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle><line x1="12" y1="12" x2="16.24" y2="7.76"></line><line x1="12" y1="12" x2="7.76" y2="16.24"></line><line x1="12" y1="12" x2="16.24" y2="16.24"></line><line x1="12" y1="12" x2="7.76" y2="7.76"></line></svg>'; // Steering Wheel (using lifebuoy as proxy)
+        } else if (str.indexOf("電") > -1 || str.indexOf("機") > -1 || str.indexOf("網") > -1 || str.indexOf("tech") > -1 || str.indexOf("code") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>'; // CPU / Tech
+        } else if (str.indexOf("寵") > -1 || str.indexOf("狗") > -1 || str.indexOf("貓") > -1 || str.indexOf("pet") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 13v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="15" x2="12" y2="22"></line></svg>'; // Microphone as proxy for pet/activity ? Actually let's use smile
+        } else if (str.indexOf("聚") > -1 || str.indexOf("會") > -1 || str.indexOf("友") > -1 || str.indexOf("party") > -1 || str.indexOf("friend") > -1) {
+          return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>'; // Users
+        }
+        
+        // 隨機Fallback，根據文字產生固定的圖示
+        var fallbacks = [
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>', // Book
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>', // Star
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>', // Info
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>', // Box/Package
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>', // Clock
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>', // File Text
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.69l5.66 4.12a8 8 0 1 1-11.31 0z"></path></svg>', // Droplet/Water
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>', // Zap/Lightning
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>' // Map Pin
+        ];
+        var sum = 0;
+        for (var i = 0; i < str.length; i++) sum += str.charCodeAt(i);
+        return fallbacks[sum % fallbacks.length];
+      }
+
+      function renderDashboard() {
+        categoryGrid.innerHTML = "";
+        state.categories.forEach(function(cat, index) {
+          var card = document.createElement("div");
+          card.className = "cat-card theme-" + (index % 6);
+          card.addEventListener("click", function() { openCategoryView(cat); });
+
+          var count = state.todos.filter(function(t) { return t.category === cat; }).length;
+
+          var iconWrap = document.createElement("div");
+          iconWrap.className = "cat-icon-wrap";
+          iconWrap.innerHTML = getIconForCategory(cat);
+          card.appendChild(iconWrap);
+
+          var info = document.createElement("div");
+          info.className = "cat-info";
+          
+          var title = document.createElement("h3");
+          title.className = "cat-title";
+          title.textContent = cat;
+          info.appendChild(title);
+
+          var subtitle = document.createElement("p");
+          subtitle.className = "cat-count";
+          subtitle.textContent = count + " 件待辦事項";
+          info.appendChild(subtitle);
+          
+          card.appendChild(info);
+
+          var arrow = document.createElement("div");
+          arrow.className = "cat-arrow";
+          arrow.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>';
+          card.appendChild(arrow);
+
+          categoryGrid.appendChild(card);
+        });
+      }
+
+      function openCategoryView(cat) {
+        currentViewCategory = cat;
+        catViewTitle.textContent = cat;
+        viewDashboard.classList.remove("active");
+        viewCategory.classList.add("active");
+        renderTodoList();
+      }
+
+      function renderTodoList() {
+        if (!currentViewCategory) return;
+        todoListEl.innerHTML = "";
+        
+        var items = state.todos.filter(function(t) { return t.category === currentViewCategory; });
+        
+        if (items.length === 0) {
+          todoListEl.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg><p>這裡空空如也，點擊右上角新增吧！</p></div>';
+          return;
+        }
+
+        items.forEach(function(todo) {
+          var catIndex = state.categories.indexOf(currentViewCategory);
+          var themeClass = "theme-" + (catIndex !== -1 ? catIndex % 6 : 0);
+          
+          var el = document.createElement("div");
+          el.className = "todo-item " + themeClass + (todo.completed ? " completed" : "");
+          
+          el.addEventListener("click", function() {
+            todo.completed = !todo.completed;
+            todo.confirmDelete = false;
+            saveState();
+            
+            if (todo.completed) {
+              el.classList.add("completed");
+            } else {
+              el.classList.remove("completed");
+            }
+            
+            delBtn.className = "todo-del-btn";
+            delBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
+            // Also update dashboard count silently if we return
+          });
+
+          var content = document.createElement("div");
+          content.className = "todo-content";
+          var t = document.createElement("h4");
+          t.className = "todo-title";
+          t.textContent = todo.text;
+          content.appendChild(t);
+          el.appendChild(content);
+
+          var foot = document.createElement("div");
+          foot.className = "todo-foot";
+          
+          var delBtn = document.createElement("button");
+          delBtn.className = "todo-del-btn" + (todo.confirmDelete ? " confirming" : "");
+          delBtn.innerHTML = todo.confirmDelete ? "確認刪除" : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
+          
+          delBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
+            if (todo.confirmDelete) {
+              state.todos = state.todos.filter(function(x) { return x.id !== todo.id; });
+              saveState();
+              renderTodoList();
+            } else {
+              // reset others
+              state.todos.forEach(function(x) { x.confirmDelete = false; });
+              todo.confirmDelete = true;
+              saveState();
+              renderTodoList();
+            }
+          });
+          foot.appendChild(delBtn);
+
+          el.appendChild(foot);
+          todoListEl.appendChild(el);
+        });
+      }
+
+      function handleManualAdd() {
+        var text = todoText.value.trim();
+        var cat = (todoCategory.value.trim() || "雜事");
+        if (!text) { setStatus("請輸入待辦內容", true); return; }
+        
+        ensureCategory(cat);
+        state.todos.unshift({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+          text: text,
+          category: cat,
+          completed: false,
+          confirmDelete: false
+        });
+        saveState();
+        closeModal();
+        if (currentViewCategory === cat) renderTodoList();
+        renderDashboard();
+        renderDrawerCats();
+      }
+
+      function renderPreviews() {
+        previewGrid.innerHTML = "";
+        var files = Array.prototype.slice.call(imageInput.files || []);
+        files.forEach(function(f) {
+          var img = document.createElement("img");
+          img.src = URL.createObjectURL(f);
+          img.onload = function() { URL.revokeObjectURL(img.src); };
+          previewGrid.appendChild(img);
+        });
+      }
+
+      function fileToInlinePart(file) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function () {
+            var base64 = String(reader.result || "").split(",")[1] || "";
+            resolve({ inlineData: { mimeType: file.type || "image/jpeg", data: base64 } });
+          };
+          reader.onerror = function () { reject(new Error("讀取圖片失敗")); };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function handleAiAdd() {
+        var files = Array.prototype.slice.call(imageInput.files || []);
+        if (!files.length) { setStatus("請選擇至少一張圖片", true); return; }
+        
+        submitAiBtn.disabled = true;
+        setStatus("AI 辨識中，請稍候...", false);
+        try {
+          var imageParts = await Promise.all(files.map(fileToInlinePart));
+          var prompt = "請辨識圖片中的待辦事項。優先分類至：" + state.categories.join("、") + "。回傳 JSON 格式：{\"todos\":[{\"text\":\"待辦內容\",\"category\":\"分類\"}]}。請確保 JSON 格式正確無誤。";
+          
+          var req = {
+            contents: [{ role: "user", parts: [{ text: prompt }].concat(imageParts) }],
+            generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
+          };
+
+          var url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(MODEL_ID) + ":generateContent?key=" + encodeURIComponent(FIXED_API_KEY);
+          var res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+          var raw = await res.text();
+          if (!res.ok) throw new Error("API 錯誤");
+          
+          var outer = JSON.parse(raw);
+          var text = (((outer || {}).candidates || [])[0] || {}).content;
+          var firstPart = ((text || {}).parts || [])[0] || {};
+          var parsedStr = String(firstPart.text || "").trim();
+          var m = parsedStr.match(/```(?:json)?\s*([\s\S]*?)```/i);
+          var parsed = JSON.parse(m ? m[1] : parsedStr);
+          
+          var todos = Array.isArray(parsed.todos) ? parsed.todos : [];
+          if (!todos.length) throw new Error("未發現待辦事項");
+
+          todos.forEach(function(t) {
+            var txt = String(t.text || "").trim();
+            var cat = String(t.category || "").trim() || "雜事";
+            if (!txt) return;
+            var exists = state.todos.some(function(x) { return x.text === txt; });
+            if (!exists) {
+              ensureCategory(cat);
+              state.todos.unshift({
+                id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+                text: txt, category: cat, completed: false, confirmDelete: false
+              });
+            }
+          });
+          saveState();
+          closeModal();
+          if (currentViewCategory) renderTodoList();
+          renderDashboard();
+          renderDrawerCats();
+        } catch (e) {
+          setStatus(e.message || "發生錯誤", true);
+        } finally {
+          submitAiBtn.disabled = false;
+        }
+      }
+    })();
+  </script>
+</body>
+</html>
