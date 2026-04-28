@@ -810,7 +810,9 @@
             openCategoryView(cat); 
           });
 
-          var count = filteredTodos.filter(function(t) { return t.category === cat; }).length;
+          var catTodos = filteredTodos.filter(function(t) { return t.category === cat; });
+          var pendingCount = catTodos.filter(function(t) { return !t.completed; }).length;
+          var completedCount = catTodos.filter(function(t) { return t.completed; }).length;
 
           var iconWrap = document.createElement("div");
           iconWrap.className = "cat-icon-wrap";
@@ -827,8 +829,17 @@
 
           var subtitle = document.createElement("p");
           subtitle.className = "cat-count";
-          subtitle.textContent = count + " 件待辦事項";
+          subtitle.textContent = pendingCount + " 件待辦事項";
           info.appendChild(subtitle);
+
+          if (completedCount > 0) {
+            var compSubtitle = document.createElement("p");
+            compSubtitle.className = "cat-count";
+            compSubtitle.style.color = "rgba(28, 28, 30, 0.4)";
+            compSubtitle.style.marginTop = "2px";
+            compSubtitle.textContent = completedCount + " 件已完成";
+            info.appendChild(compSubtitle);
+          }
           
           card.appendChild(info);
 
@@ -869,7 +880,8 @@
         });
         
         if (items.length === 0) {
-          todoListEl.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg><p>這裡空空如也，點擊右上角新增吧！</p></div>';
+          var msg = currentDateOffset < 0 ? "沒有需要處理的事情" : "這裡空空如也，點擊右上角新增吧！";
+          todoListEl.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg><p>' + msg + '</p></div>';
           return;
         }
 
