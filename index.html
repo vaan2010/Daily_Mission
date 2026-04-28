@@ -69,6 +69,23 @@
     .topbar-title { font-size: 1.35rem; font-weight: 700; margin: 0; flex: 1; text-align: center; }
 
     /* Header Area (分類 + 號) */
+    .dashboard-date {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin: 12px 0 0;
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+    }
+    .date-nav-btn {
+      background: var(--panel); border: none; color: var(--text);
+      width: 36px; height: 36px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .date-nav-btn:active { transform: scale(0.9); }
+    .date-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+    .date-nav-btn svg { width: 18px; height: 18px; stroke-width: 2.5; }
+
     .section-header {
       display: flex; align-items: center; justify-content: space-between;
       margin: 12px 0 20px;
@@ -105,7 +122,7 @@
       cursor: pointer;
       transition: transform 0.15s, filter 0.15s;
     }
-    .cat-card:active { transform: scale(0.96); filter: brightness(0.9); }
+    .cat-card.pressing { transform: scale(0.96); filter: brightness(0.9); }
     
     .cat-icon-wrap {
       width: 48px; height: 48px;
@@ -214,7 +231,7 @@
       transition: transform 0.15s ease, opacity 0.2s; 
       cursor: pointer; position: relative;
     }
-    .todo-item:active { transform: scale(0.97); }
+    .todo-item.pressing { transform: scale(0.97); }
     
     .todo-content { width: 100%; display: flex; align-items: center; justify-content: center; z-index: 1; padding: 24px 12px; }
     .todo-title { margin: 0; font-size: 1.85rem; font-weight: 800; color: var(--text); transition: all 0.2s; line-height: 1.3; text-align: center; word-break: break-word; }
@@ -259,7 +276,6 @@
     .todo-star-btn:active { transform: scale(0.85); }
     .todo-item[class*="theme-"] .todo-star-btn.starred svg { fill: #f5a623; stroke: #f5a623; }
     .todo-star-btn.starred svg { fill: #f5a623; stroke: #f5a623; }
-    .todo-item.completed .todo-star-btn { opacity: 0.3; pointer-events: none; }
     
     .todo-del-btn {
       width: 36px; height: 36px; border-radius: 50%;
@@ -338,6 +354,15 @@
     </header>
 
     <div class="container">
+      <div class="dashboard-date">
+        <button id="prevDateBtn" class="date-nav-btn" aria-label="前一天">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <span id="dashboardDateText"></span>
+        <button id="nextDateBtn" class="date-nav-btn" aria-label="後一天">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
       <div class="section-header">
         <h2>分類</h2>
         <button id="openAddModalBtn" class="btn-primary" aria-label="新增">
@@ -451,6 +476,27 @@
       var statusMsg = document.getElementById("statusMsg");
 
       var currentViewCategory = null;
+      var currentDateOffset = 0;
+
+      function getDisplayDateStr(offset) {
+        var d = new Date();
+        d.setDate(d.getDate() + offset);
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      }
+
+      function getFilteredTodos() {
+        var targetDate = getDisplayDateStr(currentDateOffset);
+        var todayDate = getDisplayDateStr(0);
+        return state.todos.filter(function(t) {
+          if (currentDateOffset === 0) {
+            // Today: show uncompleted + completed today
+            return !t.completed || t.completedAt === todayDate;
+          } else {
+            // Past day: show only items completed on that day
+            return t.completed && t.completedAt === targetDate;
+          }
+        });
+      }
 
       // Theme toggle
       if (localStorage.getItem("gemini_todo_theme") === "light") {
@@ -680,12 +726,91 @@
 
       function renderDashboard() {
         categoryGrid.innerHTML = "";
+        
+        // Render Date
+        var prevDateBtn = document.getElementById("prevDateBtn");
+        var nextDateBtn = document.getElementById("nextDateBtn");
+        var dateTextEl = document.getElementById("dashboardDateText");
+        
+        if (dateTextEl && prevDateBtn && nextDateBtn) {
+          var d = new Date();
+          d.setDate(d.getDate() + currentDateOffset);
+          var options = { month: 'long', day: 'numeric', weekday: 'long' };
+          dateTextEl.textContent = d.toLocaleDateString('zh-TW', options);
+          
+          nextDateBtn.disabled = currentDateOffset >= 0;
+          
+          if (currentDateOffset < 0) {
+            if (openAddModalBtn) openAddModalBtn.style.display = "none";
+            if (openAddModalCatBtn) openAddModalCatBtn.style.display = "none";
+          } else {
+            if (openAddModalBtn) openAddModalBtn.style.display = "";
+            if (openAddModalCatBtn) openAddModalCatBtn.style.display = "";
+          }
+
+          prevDateBtn.onclick = function() {
+            currentDateOffset--;
+            renderDashboard();
+          };
+          nextDateBtn.onclick = function() {
+            if (currentDateOffset < 0) {
+              currentDateOffset++;
+              renderDashboard();
+            }
+          };
+        }
+        
+        var filteredTodos = getFilteredTodos();
+
         state.categories.forEach(function(cat, index) {
           var card = document.createElement("div");
           card.className = "cat-card theme-" + (index % 6);
-          card.addEventListener("click", function() { openCategoryView(cat); });
+          
+          var pressTimer = null;
+          var isLongPress = false;
+          
+          function startPress(e) {
+            isLongPress = false;
+            card.classList.add("pressing");
+            pressTimer = setTimeout(function() {
+              pressTimer = null;
+              isLongPress = true;
+              card.classList.remove("pressing");
+              var newCat = prompt("重新命名分類：", cat);
+              if (newCat !== null && newCat.trim() !== "" && newCat.trim() !== cat) {
+                var finalCat = newCat.trim();
+                if (state.categories.indexOf(finalCat) === -1) {
+                  state.categories[index] = finalCat;
+                  state.todos.forEach(function(t) { if (t.category === cat) t.category = finalCat; });
+                  saveState();
+                  renderDashboard();
+                  renderDrawerCats();
+                } else {
+                  alert("此分類名稱已存在！");
+                }
+              }
+            }, 600);
+          }
+          
+          function cancelPress() { 
+            card.classList.remove("pressing");
+            if(pressTimer) clearTimeout(pressTimer); 
+          }
+          
+          card.addEventListener("mousedown", startPress);
+          card.addEventListener("touchstart", startPress);
+          card.addEventListener("touchmove", cancelPress);
+          card.addEventListener("mouseup", cancelPress);
+          card.addEventListener("mouseleave", cancelPress);
+          card.addEventListener("touchend", cancelPress);
+          card.addEventListener("touchcancel", cancelPress);
 
-          var count = state.todos.filter(function(t) { return t.category === cat; }).length;
+          card.addEventListener("click", function() { 
+            if (isLongPress) return;
+            openCategoryView(cat); 
+          });
+
+          var count = filteredTodos.filter(function(t) { return t.category === cat; }).length;
 
           var iconWrap = document.createElement("div");
           iconWrap.className = "cat-icon-wrap";
@@ -721,6 +846,13 @@
         catViewTitle.textContent = cat;
         viewDashboard.classList.remove("active");
         viewCategory.classList.add("active");
+        
+        if (currentDateOffset < 0) {
+          if (openAddModalCatBtn) openAddModalCatBtn.style.display = "none";
+        } else {
+          if (openAddModalCatBtn) openAddModalCatBtn.style.display = "";
+        }
+        
         renderTodoList();
       }
 
@@ -728,7 +860,7 @@
         if (!currentViewCategory) return;
         todoListEl.innerHTML = "";
         
-        var items = state.todos.filter(function(t) { return t.category === currentViewCategory; });
+        var items = getFilteredTodos().filter(function(t) { return t.category === currentViewCategory; });
         
         items.sort(function(a, b) {
           if (a.starred && !b.starred) return -1;
@@ -760,10 +892,24 @@
           el.appendChild(starBtn);
           
           el.addEventListener("click", function() {
+            if (isLongPress) return;
             todo.completed = !todo.completed;
             todo.confirmDelete = false;
+            
+            if (todo.completed) {
+              todo.completedAt = getDisplayDateStr(currentDateOffset);
+            } else {
+              todo.completedAt = null;
+            }
+            
             saveState();
             
+            // If viewing a past date and unchecking, it disappears and moves to today
+            if (currentDateOffset < 0 && !todo.completed) {
+              renderTodoList();
+              return;
+            }
+
             if (todo.completed) {
               el.classList.add("completed");
             } else {
@@ -777,10 +923,15 @@
 
           // Long press to edit
           var pressTimer;
+          var isLongPress = false;
           function startPress(e) {
             if (e.target.closest('button')) return; // ignore buttons
+            isLongPress = false;
+            el.classList.add("pressing");
             pressTimer = setTimeout(function() {
               pressTimer = null;
+              isLongPress = true;
+              el.classList.remove("pressing");
               var newText = prompt("編輯待辦事項：", todo.text);
               if (newText !== null && newText.trim() !== "") {
                 todo.text = newText.trim();
@@ -789,9 +940,13 @@
               }
             }, 600);
           }
-          function cancelPress() { if(pressTimer) clearTimeout(pressTimer); }
+          function cancelPress() { 
+            el.classList.remove("pressing");
+            if(pressTimer) clearTimeout(pressTimer); 
+          }
           el.addEventListener("mousedown", startPress);
           el.addEventListener("touchstart", startPress);
+          el.addEventListener("touchmove", cancelPress);
           el.addEventListener("mouseup", cancelPress);
           el.addEventListener("mouseleave", cancelPress);
           el.addEventListener("touchend", cancelPress);
