@@ -417,6 +417,10 @@
 
       <div id="aiAddSection" style="display:none;">
         <div class="field">
+          <label>Gemini API Key</label>
+          <input id="apiKeyInput" type="text" placeholder="輸入 API Key..." />
+        </div>
+        <div class="field">
           <label>上傳圖片（支援多選）</label>
           <input id="imageInput" type="file" accept="image/*" multiple />
           <div id="previewGrid" class="preview-grid"></div>
@@ -430,7 +434,6 @@
 
   <script>
     (function () {
-      var FIXED_API_KEY = "AIzaSyDaa0wqO-BFEIWE12A4LwUkGS657uosRrM";
       var MODEL_ID = "gemini-2.5-flash";
       var STORAGE_KEY = "gemini_todo_data_v2";
 
@@ -471,12 +474,18 @@
       var submitAddBtn = document.getElementById("submitAddBtn");
       
       var imageInput = document.getElementById("imageInput");
+      var apiKeyInput = document.getElementById("apiKeyInput");
       var previewGrid = document.getElementById("previewGrid");
       var submitAiBtn = document.getElementById("submitAiBtn");
       var statusMsg = document.getElementById("statusMsg");
 
       var currentViewCategory = null;
       var currentDateOffset = 0;
+
+      // Load API Key
+      if (apiKeyInput) {
+        apiKeyInput.value = localStorage.getItem("gemini_api_key") || "";
+      }
 
       function getDisplayDateStr(offset) {
         var d = new Date();
@@ -1045,9 +1054,13 @@
       }
 
       async function handleAiAdd() {
+        var key = apiKeyInput ? apiKeyInput.value.trim() : "";
+        if (!key) { setStatus("請輸入 Gemini API Key", true); return; }
+        
         var files = Array.prototype.slice.call(imageInput.files || []);
         if (!files.length) { setStatus("請選擇至少一張圖片", true); return; }
         
+        localStorage.setItem("gemini_api_key", key);
         submitAiBtn.disabled = true;
         setStatus("AI 辨識中，請稍候...", false);
         try {
@@ -1059,7 +1072,7 @@
             generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
           };
 
-          var url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(MODEL_ID) + ":generateContent?key=" + encodeURIComponent(FIXED_API_KEY);
+          var url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(MODEL_ID) + ":generateContent?key=" + encodeURIComponent(key);
           var res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
           var raw = await res.text();
           if (!res.ok) {
